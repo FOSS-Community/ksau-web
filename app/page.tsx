@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
 import { SystemInfo } from "./components/system-info";
 import { StorageQuota } from "./components/storage-quota";
+import { Switch } from "@/components/ui/switch";
+import { getUploadToken, createUploadSession, uploadFileInChunks } from "./utils/upload";
 
 export default function Home() {
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -20,6 +22,7 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [cliCommand, setCliCommand] = useState("");
+  const [isClientSideUpload, setIsClientSideUpload] = useState(true);
   const [formValues, setFormValues] = useState({
     remote: "oned",
     remoteFolder: "/",
@@ -65,16 +68,51 @@ export default function Home() {
     setFormValues(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedFile || isUploading) return;
-    
-    setIsUploading(true);
-    setUploadProgress(0);
+  const handleClientSideUpload = async () => {
+    if (!selectedFile) return;
 
-    const formData = new FormData(event.currentTarget);
-    formData.set('file', selectedFile);
+    try {
+      // Get upload token
+      const tokenResponse = await getUploadToken(formValues.remote);
+      
+      // Construct remote file path
+      const fileName = formValues.remoteFileName || selectedFile.name;
+      const remoteFilePath = `${tokenResponse.upload_root_path}/${formValues.remoteFolder.replace(/^\/+|\/+$/g, '')}/${fileName}`.replace(/\/+/g, '/');
+      
+      // Create upload session
+      const uploadUrl = await createUploadSession(tokenResponse.access_token, remoteFilePath);
+      
+      // Upload file in chunks
+      await uploadFileInChunks(
+        selectedFile,
+        uploadUrl,
+        parseInt(formValues.chunkSize),
+        setUploadProgress
+      );
 
+      // Set download URL
+      const downloadPath = `${tokenResponse.base_url}/${formValues.remoteFolder.replace(/^\/+|\/+$/g, '')}/${fileName}`;
+      setDownloadUrl(downloadPath);
+
+      toast({
+        title: "Upload complete",
+        description: "File uploaded successfully to the cloud",
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      let errorMessage = "Upload failed";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      toast({
+        title: "Upload Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTraditionalUpload = async (formData: FormData) => {
     try {
       const progressInterval = setInterval(() => {
         setUploadProgress((prev) => {
@@ -103,6 +141,26 @@ export default function Home() {
         });
       } else {
         throw new Error(result.error || "Upload failed");
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedFile || isUploading) return;
+    
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      if (isClientSideUpload) {
+        await handleClientSideUpload();
+      } else {
+        const formData = new FormData(event.currentTarget);
+        formData.set('file', selectedFile);
+        await handleTraditionalUpload(formData);
       }
     } catch (error) {
       setUploadProgress(0);
@@ -166,7 +224,7 @@ export default function Home() {
               animationDelay: `${Math.random() * 5}s`,
             }}
           >
-            {"{>}"} $ 
+            {"{>}"} $
           </div>
         ))}
       </div>
@@ -247,6 +305,15 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="flex items-center justify-between space-x-4 mb-4">
+                    <label className="text-sm text-green-300">Client-side Upload</label>
+                    <Switch
+                      checked={isClientSideUpload}
+                      onCheckedChange={setIsClientSideUpload}
+                      className="data-[state=checked]:bg-green-500"
+                    />
+                  </div>
+
                   <div 
                     {...getRootProps()} 
                     className={`drop-zone p-10 rounded-lg cursor-pointer ${
@@ -321,8 +388,8 @@ export default function Home() {
                     <label className="text-sm">
                       {"{>}"} CHUNK_SIZE
                     </label>
-                    <Select 
-                      name="chunkSize" 
+                    <Select
+                      name="chunkSize"
                       defaultValue={formValues.chunkSize}
                       onValueChange={(value) => handleFormChange('chunkSize', value)}
                       disabled={isUploading}
@@ -345,8 +412,8 @@ export default function Home() {
                         <span>{"{>}"} Upload progress</span>
                         <span>{uploadProgress}%</span>
                       </div>
-                      <Progress 
-                        value={uploadProgress} 
+                      <Progress
+                        value={uploadProgress}
                         className="h-2 bg-green-950"
                       />
                     </div>
@@ -357,7 +424,7 @@ export default function Home() {
                       type="submit"
                       disabled={isUploading || !selectedFile}
                       className={`w-full border-green-500 ${
-                        isUploading || !selectedFile 
+                        isUploading || !selectedFile
                           ? 'bg-green-500/5 text-green-700 cursor-not-allowed'
                           : 'bg-green-500/10 hover:bg-green-500/20 text-green-500'
                       }`}
@@ -375,7 +442,7 @@ export default function Home() {
 
                     <div className="text-center space-y-2">
                       <p className="text-sm text-green-700">{"{>}"} Want more power? Try our CLI:</p>
-                      <a 
+                      <a
                         href="https://github.com/global-index-source/ksau-go"
                         target="_blank"
                         rel="noopener noreferrer"

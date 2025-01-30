@@ -1,7 +1,8 @@
 // Configuration with fallback values
 export const config = {
-  apiEndpoint: process.env.NEXT_PUBLIC_API_ENDPOINT || 'https://project.ksauraj.eu.org',
+  apiEndpoint: (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_ENDPOINT : undefined) || 'https://project.ksauraj.eu.org',
   endpoints: {
-    upload: '/upload'
+    upload: '/upload',
+    token: '/token'
   }
 };
