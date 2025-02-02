@@ -130,3 +130,7 @@ This web interface works alongside the [ksau-go CLI tool](https://github.com/glo
 ## License
 
 This project is open-source and available under the MIT License.
+
+# Donation Acknowledgment
+
+**Proudly donated to [FOSS-Community](https://github.com/FOSS-Community) by [Pratham](https://github.com/prathamdby), [Hakimi](https://github.com/hakimifr) and [Sauraj](https://github.com/ksauraj)**
